@@ -4,16 +4,43 @@ require 'json'
 require 'socket'
 require 'date'
 
-def readCommits
-  last_commits_json = File.read("/home/konrad/.lastcommits.json")
-  return JSON.parse(last_commits_json) || {}
+class Config
+
+  LASTCOMMITS_FILE = "~/.lastcommits.json"
+
+  attr_reader project_name
+
+  def initialize
+    @configFile = File.expand_path LASTCOMMITS_FILE
+    @project_name = `basename \`git rev-parse --show-toplevel\``
+  end
+
+  def readCommits
+    last_commits_json = File.read(@configFile)
+    return JSON.parse(last_commits_json) || {}
+  end
+
+  def writeCommit(hash)
+    last_commits = readCommits
+    last_commits[@project_name] = hash
+    File.write(@configFile, last_commits.to_json)
+  end
 end
 
-def writeCommit(hash)
-  project_name = `basename \`git rev-parse --show-toplevel\``
-  last_commits = readCommits
-  last_commits[project_name] = hash
-  File.write("/home/konrad/.lastcommits.json", last_commits.to_json)
+class GitGraylog
+  def initialize
+    @config = Config.new
+  end
+
+  def getLog
+    last_commits = readCommits
+    project_name = `basename \`git rev-parse --show-toplevel\``
+    if lastHash = last_commits[project_name]
+      logs = `git graylog origin/master --no-merges --shortstat #{lastHash}..HEAD`.split("\n\n")
+    else
+      logs = `git graylog origin/master --no-merges --shortstat`.split("\n\n")
+    end
+  end
 end
 
 def send_result(log, index, stat_result={})
@@ -59,13 +86,6 @@ end
 
 `git fetch`
 
-last_commits = readCommits
-project_name = `basename \`git rev-parse --show-toplevel\``
-if lastHash = last_commits[project_name]
-  logs = `git graylog origin/master --no-merges --shortstat #{lastHash}..HEAD`.split("\n\n")
-else
-  logs = `git graylog origin/master --no-merges --shortstat`.split("\n\n")
-end
 
 logs.each_with_index do |log_stat, index|
   log_stat_arr = log_stat.lines
