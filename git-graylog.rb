@@ -19,8 +19,8 @@ class Config
 
   def projectFromPath(path)
     cwd = Dir.pwd
-    Dir.chdir(path)  
-    name = `basename \`git rev-parse --show-toplevel\``.strip 
+    Dir.chdir(path)
+    name = `basename \`git rev-parse --show-toplevel\``.strip
     Dir.chdir(cwd)
     return name
   end
@@ -135,7 +135,7 @@ class GitGraylog
     projects = @config.projects
     projects.each do |project_name|
       logs = getLogs(project_name)
-  
+
       logs.each_with_index do |log_stat, index|
         hash = parseLog(project_name, log_stat)
         if (index === 0)
@@ -205,7 +205,7 @@ if !path.nil?
     STDERR.puts "error: #{path} does not exists or is not a directory"
     exit
   end
-  
+
   unless File.directory?(path + "/.git")
     STDERR.puts "error: #{path} is not a git root"
     exit
