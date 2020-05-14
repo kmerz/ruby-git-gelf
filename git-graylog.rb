@@ -7,9 +7,10 @@ require 'date'
 class Config
   LASTCOMMITS_FILE = "~/.lastcommits.json"
 
-  def initialize(path = nil)
+  def initialize(path = nil, flush = false)
     @configFile = File.expand_path LASTCOMMITS_FILE
     @config = readLastCommits
+    @flush = flush
     unless path.nil?
       project_name = projectFromPath(path)
       @config[project_name] = {}
@@ -35,6 +36,9 @@ class Config
   end
 
   def hashForProject(project)
+    if @flush
+      return nil
+    end
     @config[project]["hash"]
   end
 
@@ -55,8 +59,8 @@ class Config
 end
 
 class GitGraylog
-  def initialize(path = nil)
-    @config = Config.new(path)
+  def initialize(path = nil, flush = false)
+    @config = Config.new(path, flush)
   end
 
   def gitFetch
@@ -114,7 +118,7 @@ class GitGraylog
     if log_stat_arr.size > 3
       STDERR.puts "More lines than expected"
       STDERR.puts log_stat_arr
-      exit
+      return
     end
 
     if log_stat_arr.size > 2
@@ -138,6 +142,9 @@ class GitGraylog
 
       logs.each_with_index do |log_stat, index|
         hash = parseLog(project_name, log_stat)
+	if hash.nil?
+	  next
+	end
         if (index === 0)
           @config.writeCommit(project_name, hash)
         end
@@ -156,6 +163,8 @@ class GitGraylog
     hash = result[3]
 
     weekday = date.strftime("%A")
+    dayOfMonth = date.strftime("%-d")
+    dayOfTheWeek = date.strftime("%u")
     month = date.strftime("%B")
     hour = date.strftime("%H")
     minute = date.strftime("%M")
@@ -175,16 +184,18 @@ class GitGraylog
       _author: result[2],
       _hash: hash,
       _project: project_name,
-      _hour: hour,
-      _minute: minute,
-      _seconds: seconds,
+      _hour: hour.to_i,
+      _minute: minute.to_i,
+      _seconds: seconds.to_i,
       _weekday: weekday,
       _month: month,
-      _year: year,
-      _dayOfYear: dayOfYear,
-      _files_changed: stat_result[:files],
-      _lines_add: stat_result[:add],
-      _lines_removed: stat_result[:del],
+      _year: year.to_i,
+      _dayOfYear: dayOfYear.to_i,
+      _dayOfTheWeek: dayOfTheWeek.to_i,
+      _dayOfMonth: dayOfMonth.to_i,
+      _files_changed: stat_result[:files].to_i,
+      _lines_add: stat_result[:add].to_i,
+      _lines_removed: 0 - stat_result[:del].to_i,
       _git_show_message: git_show_msg
     }
   end
@@ -194,11 +205,15 @@ class GitGraylog
     s.puts gelf_msg.to_json
     s.close
 #    puts JSON.pretty_generate(gelf_msg)
-
   end
 end
 
-path = ARGV.pop
+arg = ARGV.pop
+if arg == '-f'
+  flush = true
+else
+  path = arg
+end
 
 if !path.nil?
   unless File.directory?(path)
@@ -212,5 +227,5 @@ if !path.nil?
   end
 end
 
-gitGraylog = GitGraylog.new(path)
+gitGraylog = GitGraylog.new(path, flush)
 gitGraylog.run
